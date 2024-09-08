@@ -16,6 +16,7 @@ import {
   EventTimeline,
   EventTimelineSet,
   EventTimelineSetHandlerMap,
+  IContent,
   IEncryptedFile,
   MatrixClient,
   MatrixEvent,
@@ -46,6 +47,7 @@ import {
 } from 'folds';
 import { isKeyHotkey } from 'is-hotkey';
 import { Opts as LinkifyOpts } from 'linkifyjs';
+import { useTranslation } from 'react-i18next';
 import {
   decryptFile,
   eventWithShortcode,
@@ -120,6 +122,7 @@ import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
+import { useSpecVersions } from '../../hooks/useSpecVersions';
 
 const TimelineFloat = as<'div', css.TimelineFloatVariants>(
   ({ position, className, ...props }, ref) => (
@@ -308,9 +311,9 @@ const useTimelinePagination = (
         range:
           offsetRange > 0
             ? {
-                start: currentTimeline.range.start + offsetRange,
-                end: currentTimeline.range.end + offsetRange,
-              }
+              start: currentTimeline.range.start + offsetRange,
+              end: currentTimeline.range.end + offsetRange,
+            }
             : { ...currentTimeline.range },
       }));
     };
@@ -329,7 +332,7 @@ const useTimelinePagination = (
       if (
         !paginationToken &&
         getTimelinesEventsCount(lTimelines) !==
-          getTimelinesEventsCount(getLinkedTimelines(timelineToPaginate))
+        getTimelinesEventsCount(getLinkedTimelines(timelineToPaginate))
       ) {
         recalibratePagination(lTimelines, timelinesEventsCount, backwards);
         return;
@@ -435,6 +438,8 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
 
 export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimelineProps) {
   const mx = useMatrixClient();
+  const { versions } = useSpecVersions();
+  const useAuthentication = versions.includes('v1.11');
   const encryptedRoom = mx.isRoomEncrypted(room.roomId);
   const [messageLayout] = useSetting(settingsAtom, 'messageLayout');
   const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
@@ -488,10 +493,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
   const [focusItem, setFocusItem] = useState<
     | {
-        index: number;
-        scrollTo: boolean;
-        highlight: boolean;
-      }
+      index: number;
+      scrollTo: boolean;
+      highlight: boolean;
+    }
     | undefined
   >();
   const alive = useAlive();
@@ -509,10 +514,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     () =>
       getReactCustomHtmlParser(mx, room.roomId, {
         linkifyOpts,
+        useAuthentication,
         handleSpoilerClick: spoilerClickHandler,
         handleMentionClick: mentionClickHandler,
       }),
-    [mx, room, linkifyOpts, spoilerClickHandler, mentionClickHandler]
+    [mx, room, linkifyOpts, spoilerClickHandler, mentionClickHandler, useAuthentication]
   );
   const parseMemberEvent = useMemberEventParser();
 
@@ -724,6 +730,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           const editableEvtId = editableEvt?.getId();
           if (!editableEvtId) return;
           setEditId(editableEvtId);
+          evt.preventDefault()
         }
       },
       [mx, room, editor]
@@ -836,13 +843,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     markAsRead(mx, room.roomId);
   };
 
-  const handleOpenReply: MouseEventHandler<HTMLButtonElement> = useCallback(
+  const handleOpenReply: MouseEventHandler = useCallback(
     async (evt) => {
-      const replyId = evt.currentTarget.getAttribute('data-reply-id');
-      if (typeof replyId !== 'string') return;
-      const replyTimeline = getEventTimeline(room, replyId);
+      const targetId = evt.currentTarget.getAttribute('data-event-id');
+      if (!targetId) return;
+      const replyTimeline = getEventTimeline(room, targetId);
       const absoluteIndex =
-        replyTimeline && getEventIdAbsoluteIndex(timeline.linkedTimelines, replyTimeline, replyId);
+        replyTimeline && getEventIdAbsoluteIndex(timeline.linkedTimelines, replyTimeline, targetId);
 
       if (typeof absoluteIndex === 'number') {
         scrollToItem(absoluteIndex, {
@@ -857,7 +864,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         });
       } else {
         setTimeline(getEmptyTimeline());
-        loadEventTimeline(replyId);
+        loadEventTimeline(targetId);
       }
     },
     [room, timeline, scrollToItem, loadEventTimeline]
@@ -908,8 +915,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
       const replyEvt = room.findEventById(replyId);
       if (!replyEvt) return;
       const editedReply = getEditedEvent(replyId, replyEvt, room.getUnfilteredTimelineSet());
-      const { body, formatted_body: formattedBody }: Record<string, string> =
-        editedReply?.getContent()['m.new_content'] ?? replyEvt.getContent();
+      const content: IContent = editedReply?.getContent()['m.new_content'] ?? replyEvt.getContent();
+      const { body, formatted_body: formattedBody } = content;
+      const { 'm.relates_to': relation } = replyEvt.getOriginalContent();
       const senderId = replyEvt.getSender();
       if (senderId && typeof body === 'string') {
         setReplyDraft({
@@ -917,6 +925,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           eventId: replyId,
           body,
           formattedBody,
+          relation,
         });
         setTimeout(() => ReactEditor.focus(editor), 100);
       }
@@ -958,6 +967,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     },
     [editor]
   );
+  const { t } = useTranslation();
 
   const renderMatrixEvent = useMatrixEventRenderer<
     [string, MatrixEvent, number, EventTimelineSet, boolean]
@@ -967,7 +977,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         const reactionRelations = getEventReactions(timelineSet, mEventId);
         const reactions = reactionRelations && reactionRelations.getSortedAnnotationsByKey();
         const hasReactions = reactions && reactions.length > 0;
-        const { replyEventId } = mEvent;
+        const { replyEventId, threadRootId } = mEvent;
         const highlighted = focusItem?.index === item && focusItem.highlight;
 
         const editedEvent = getEditedEvent(mEventId, mEvent, timelineSet);
@@ -1002,12 +1012,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             reply={
               replyEventId && (
                 <Reply
-                  as="button"
                   mx={mx}
                   room={room}
                   timelineSet={timelineSet}
-                  eventId={replyEventId}
-                  data-reply-id={replyEventId}
+                  replyEventId={replyEventId}
+                  threadRootId={threadRootId}
                   onClick={handleOpenReply}
                 />
               )
@@ -1048,7 +1057,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         const reactionRelations = getEventReactions(timelineSet, mEventId);
         const reactions = reactionRelations && reactionRelations.getSortedAnnotationsByKey();
         const hasReactions = reactions && reactions.length > 0;
-        const { replyEventId } = mEvent;
+        const { replyEventId, threadRootId } = mEvent;
         const highlighted = focusItem?.index === item && focusItem.highlight;
 
         return (
@@ -1075,12 +1084,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
             reply={
               replyEventId && (
                 <Reply
-                  as="button"
                   mx={mx}
                   room={room}
                   timelineSet={timelineSet}
-                  eventId={replyEventId}
-                  data-reply-id={replyEventId}
+                  replyEventId={replyEventId}
+                  threadRootId={threadRootId}
                   onClick={handleOpenReply}
                 />
               )
@@ -1273,7 +1281,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
                 <Box grow="Yes" direction="Column">
                   <Text size="T300" priority="300">
                     <b>{senderName}</b>
-                    {' changed room name'}
+                    {t('Organisms.RoomCommon.changed_room_name')}
                   </Text>
                 </Box>
               }
@@ -1462,14 +1470,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     const eventJSX = reactionOrEditEvent(mEvent)
       ? null
       : renderMatrixEvent(
-          mEvent.getType(),
-          typeof mEvent.getStateKey() === 'string',
-          mEventId,
-          mEvent,
-          item,
-          timelineSet,
-          collapsed
-        );
+        mEvent.getType(),
+        typeof mEvent.getStateKey() === 'string',
+        mEventId,
+        mEvent,
+        item,
+        timelineSet,
+        collapsed
+      );
     prevEvent = mEvent;
     isPrevRendered = !!eventJSX;
 
@@ -1551,9 +1559,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           {!canPaginateBack && rangeAtStart && getItems().length > 0 && (
             <div
               style={{
-                padding: `${config.space.S700} ${config.space.S400} ${config.space.S600} ${
-                  messageLayout === 1 ? config.space.S400 : toRem(64)
-                }`,
+                padding: `${config.space.S700} ${config.space.S400} ${config.space.S600} ${messageLayout === 1 ? config.space.S400 : toRem(64)
+                  }`,
               }}
             >
               <RoomIntro room={room} />

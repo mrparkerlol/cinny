@@ -6,6 +6,7 @@ import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import { NodeGlobalsPolyfillPlugin } from '@esbuild-plugins/node-globals-polyfill';
 import inject from '@rollup/plugin-inject';
 import topLevelAwait from 'vite-plugin-top-level-await';
+import { VitePWA } from 'vite-plugin-pwa';
 import buildConfig from './build.config';
 
 const copyFiles = {
@@ -39,6 +40,10 @@ const copyFiles = {
       src: 'public/res/android',
       dest: 'public/',
     },
+    {
+      src: 'public/locales',
+      dest: 'public/',
+    },
   ],
 };
 
@@ -50,11 +55,11 @@ export default defineConfig({
     port: 8080,
     host: true,
     proxy: {
-      "^\\/.*?\\/olm\\.wasm$": {
+      '^\\/.*?\\/olm\\.wasm$': {
         target: 'http://localhost:8080',
-        rewrite: () => '/olm.wasm'
-      }
-    }
+        rewrite: () => '/olm.wasm',
+      },
+    },
   },
   plugins: [
     topLevelAwait({
@@ -67,6 +72,16 @@ export default defineConfig({
     vanillaExtractPlugin(),
     wasm(),
     react(),
+    VitePWA({
+      srcDir: 'src',
+      filename: 'sw.ts',
+      strategies: 'injectManifest',
+      injectRegister: false,
+      manifest: false,
+      injectManifest: {
+        injectionPoint: undefined,
+      },
+    }),
   ],
   optimizeDeps: {
     esbuildOptions: {
