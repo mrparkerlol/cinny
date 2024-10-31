@@ -17,7 +17,6 @@ import {
   EventTimelineSet,
   EventTimelineSetHandlerMap,
   IContent,
-  IEncryptedFile,
   MatrixClient,
   MatrixEvent,
   Room,
@@ -48,12 +47,7 @@ import {
 import { isKeyHotkey } from 'is-hotkey';
 import { Opts as LinkifyOpts } from 'linkifyjs';
 import { useTranslation } from 'react-i18next';
-import {
-  decryptFile,
-  eventWithShortcode,
-  factoryEventSentBy,
-  getMxIdLocalPart,
-} from '../../utils/matrix';
+import { eventWithShortcode, factoryEventSentBy, getMxIdLocalPart } from '../../utils/matrix';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useVirtualPaginator, ItemRange } from '../../hooks/useVirtualPaginator';
 import { useAlive } from '../../hooks/useAlive';
@@ -122,7 +116,7 @@ import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
-import { useSpecVersions } from '../../hooks/useSpecVersions';
+import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 
 const TimelineFloat = as<'div', css.TimelineFloatVariants>(
   ({ position, className, ...props }, ref) => (
@@ -220,18 +214,6 @@ export const getEventIdAbsoluteIndex = (
   return baseIndex + eventIndex;
 };
 
-export const factoryGetFileSrcUrl =
-  (httpUrl: string, mimeType: string, encFile?: IEncryptedFile) => async (): Promise<string> => {
-    if (encFile) {
-      if (typeof httpUrl !== 'string') throw new Error('Malformed event');
-      const encRes = await fetch(httpUrl, { method: 'GET' });
-      const encData = await encRes.arrayBuffer();
-      const decryptedBlob = await decryptFile(encData, mimeType, encFile);
-      return URL.createObjectURL(decryptedBlob);
-    }
-    return httpUrl;
-  };
-
 type RoomTimelineProps = {
   room: Room;
   eventId?: string;
@@ -311,9 +293,9 @@ const useTimelinePagination = (
         range:
           offsetRange > 0
             ? {
-              start: currentTimeline.range.start + offsetRange,
-              end: currentTimeline.range.end + offsetRange,
-            }
+                start: currentTimeline.range.start + offsetRange,
+                end: currentTimeline.range.end + offsetRange,
+              }
             : { ...currentTimeline.range },
       }));
     };
@@ -332,7 +314,7 @@ const useTimelinePagination = (
       if (
         !paginationToken &&
         getTimelinesEventsCount(lTimelines) !==
-        getTimelinesEventsCount(getLinkedTimelines(timelineToPaginate))
+          getTimelinesEventsCount(getLinkedTimelines(timelineToPaginate))
       ) {
         recalibratePagination(lTimelines, timelinesEventsCount, backwards);
         return;
@@ -438,8 +420,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
 
 export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimelineProps) {
   const mx = useMatrixClient();
-  const { versions } = useSpecVersions();
-  const useAuthentication = versions.includes('v1.11');
+  const useAuthentication = useMediaAuthentication();
   const encryptedRoom = mx.isRoomEncrypted(room.roomId);
   const [messageLayout] = useSetting(settingsAtom, 'messageLayout');
   const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
@@ -493,10 +474,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
   const [focusItem, setFocusItem] = useState<
     | {
-      index: number;
-      scrollTo: boolean;
-      highlight: boolean;
-    }
+        index: number;
+        scrollTo: boolean;
+        highlight: boolean;
+      }
     | undefined
   >();
   const alive = useAlive();
@@ -730,7 +711,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           const editableEvtId = editableEvt?.getId();
           if (!editableEvtId) return;
           setEditId(editableEvtId);
-          evt.preventDefault()
+          evt.preventDefault();
         }
       },
       [mx, room, editor]
@@ -1470,14 +1451,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     const eventJSX = reactionOrEditEvent(mEvent)
       ? null
       : renderMatrixEvent(
-        mEvent.getType(),
-        typeof mEvent.getStateKey() === 'string',
-        mEventId,
-        mEvent,
-        item,
-        timelineSet,
-        collapsed
-      );
+          mEvent.getType(),
+          typeof mEvent.getStateKey() === 'string',
+          mEventId,
+          mEvent,
+          item,
+          timelineSet,
+          collapsed
+        );
     prevEvent = mEvent;
     isPrevRendered = !!eventJSX;
 
@@ -1559,8 +1540,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           {!canPaginateBack && rangeAtStart && getItems().length > 0 && (
             <div
               style={{
-                padding: `${config.space.S700} ${config.space.S400} ${config.space.S600} ${messageLayout === 1 ? config.space.S400 : toRem(64)
-                  }`,
+                padding: `${config.space.S700} ${config.space.S400} ${config.space.S600} ${
+                  messageLayout === 1 ? config.space.S400 : toRem(64)
+                }`,
               }}
             >
               <RoomIntro room={room} />

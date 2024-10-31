@@ -81,6 +81,10 @@ export default defineConfig({
       injectManifest: {
         injectionPoint: undefined,
       },
+      devOptions: {
+        enabled: true,
+        type: 'module'
+      }
     }),
   ],
   optimizeDeps: {
