@@ -19,6 +19,8 @@ import {
   Line,
   PopOut,
   RectCords,
+  Badge,
+  Spinner,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
 import { JoinRule, Room } from 'matrix-js-sdk';
@@ -32,7 +34,7 @@ import { RoomTopicViewer } from '../../components/room-topic-viewer';
 import { StateEvent } from '../../../types/matrix/room';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoom } from '../../hooks/useRoom';
-import { useSetSetting } from '../../state/hooks/settings';
+import { useSetSetting, useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { getHomeSearchPath, getSpaceSearchPath, withSearchParam } from '../../pages/pathUtils';
@@ -43,7 +45,7 @@ import { useRoomUnread } from '../../state/hooks/unread';
 import { usePowerLevelsAPI, usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { markAsRead } from '../../../client/action/notifications';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
-import { openInviteUser, toggleRoomSettings } from '../../../client/action/navigation';
+import { openInviteUser } from '../../../client/action/navigation';
 import { copyToClipboard } from '../../utils/dom';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
@@ -54,6 +56,15 @@ import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getViaServers } from '../../plugins/via-servers';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { useRoomPinnedEvents } from '../../hooks/useRoomPinnedEvents';
+import { RoomPinMenu } from './room-pin-menu';
+import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
+import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
+import {
+  getRoomNotificationMode,
+  getRoomNotificationModeIcon,
+  useRoomsNotificationPreferencesContext,
+} from '../../hooks/useRoomsNotificationPreferences';
 
 type RoomMenuProps = {
   room: Room;
@@ -61,13 +72,16 @@ type RoomMenuProps = {
 };
 const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
   const mx = useMatrixClient();
+  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const powerLevels = usePowerLevelsContext();
   const { getPowerLevel, canDoAction } = usePowerLevelsAPI(powerLevels);
   const canInvite = canDoAction('invite', getPowerLevel(mx.getUserId() ?? ''));
+  const notificationPreferences = useRoomsNotificationPreferencesContext();
+  const notificationMode = getRoomNotificationMode(notificationPreferences, room.roomId);
 
   const handleMarkAsRead = () => {
-    markAsRead(mx, room.roomId);
+    markAsRead(mx, room.roomId, hideActivity);
     requestClose();
   };
 
@@ -83,8 +97,10 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
     requestClose();
   };
 
-  const handleRoomSettings = () => {
-    toggleRoomSettings(room.roomId);
+  const openSettings = useOpenRoomSettings();
+  const parentSpace = useSpaceOptionally();
+  const handleOpenSettings = () => {
+    openSettings(room.roomId, parentSpace?.roomId);
     requestClose();
   };
 
@@ -102,6 +118,27 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
             Mark as Read
           </Text>
         </MenuItem>
+        <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
+          {(handleOpen, opened, changing) => (
+            <MenuItem
+              size="300"
+              after={
+                changing ? (
+                  <Spinner size="100" variant="Secondary" />
+                ) : (
+                  <Icon size="100" src={getRoomNotificationModeIcon(notificationMode)} />
+                )
+              }
+              radii="300"
+              aria-pressed={opened}
+              onClick={handleOpen}
+            >
+              <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+                Notifications
+              </Text>
+            </MenuItem>
+          )}
+        </RoomNotificationModeSwitcher>
       </Box>
       <Line variant="Surface" size="300" />
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
@@ -129,7 +166,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           </Text>
         </MenuItem>
         <MenuItem
-          onClick={handleRoomSettings}
+          onClick={handleOpenSettings}
           size="300"
           after={<Icon size="100" src={Icons.Setting} />}
           radii="300"
@@ -180,14 +217,18 @@ export function RoomViewHeader() {
   const room = useRoom();
   const space = useSpaceOptionally();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+  const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
   const mDirects = useAtomValue(mDirectAtom);
 
+  const pinnedEvents = useRoomPinnedEvents(room);
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
   const ecryptedRoom = !!encryptionEvent;
   const avatarMxc = useRoomAvatar(room, mDirects.has(room.roomId));
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
-  const avatarUrl = avatarMxc ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined : undefined;
+  const avatarUrl = avatarMxc
+    ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
+    : undefined;
 
   const setPeopleDrawer = useSetSetting(settingsAtom, 'isPeopleDrawer');
 
@@ -203,6 +244,10 @@ export function RoomViewHeader() {
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setMenuAnchor(evt.currentTarget.getBoundingClientRect());
+  };
+
+  const handleOpenPinMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
+    setPinMenuAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
   return (
@@ -297,6 +342,62 @@ export function RoomViewHeader() {
               )}
             </TooltipProvider>
           )}
+          <TooltipProvider
+            position="Bottom"
+            offset={4}
+            tooltip={
+              <Tooltip>
+                <Text>Pinned Messages</Text>
+              </Tooltip>
+            }
+          >
+            {(triggerRef) => (
+              <IconButton
+                style={{ position: 'relative' }}
+                onClick={handleOpenPinMenu}
+                ref={triggerRef}
+                aria-pressed={!!pinMenuAnchor}
+              >
+                {pinnedEvents.length > 0 && (
+                  <Badge
+                    style={{
+                      position: 'absolute',
+                      left: toRem(3),
+                      top: toRem(3),
+                    }}
+                    variant="Secondary"
+                    size="400"
+                    fill="Solid"
+                    radii="Pill"
+                  >
+                    <Text as="span" size="L400">
+                      {pinnedEvents.length}
+                    </Text>
+                  </Badge>
+                )}
+                <Icon size="400" src={Icons.Pin} filled={!!pinMenuAnchor} />
+              </IconButton>
+            )}
+          </TooltipProvider>
+          <PopOut
+            anchor={pinMenuAnchor}
+            position="Bottom"
+            content={
+              <FocusTrap
+                focusTrapOptions={{
+                  initialFocus: false,
+                  returnFocusOnDeactivate: false,
+                  onDeactivate: () => setPinMenuAnchor(undefined),
+                  clickOutsideDeactivates: true,
+                  isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
+                  isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
+                  escapeDeactivates: stopPropagation,
+                }}
+              >
+                <RoomPinMenu room={room} requestClose={() => setPinMenuAnchor(undefined)} />
+              </FocusTrap>
+            }
+          />
           {screenSize === ScreenSize.Desktop && (
             <TooltipProvider
               position="Bottom"

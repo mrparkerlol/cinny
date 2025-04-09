@@ -1,27 +1,12 @@
 import appDispatcher from '../dispatcher';
 import cons from '../state/cons';
 
-export function openSpaceSettings(roomId, tabText) {
-  appDispatcher.dispatch({
-    type: cons.actions.navigation.OPEN_SPACE_SETTINGS,
-    roomId,
-    tabText,
-  });
-}
 
 export function openSpaceAddExisting(roomId, spaces = false) {
   appDispatcher.dispatch({
     type: cons.actions.navigation.OPEN_SPACE_ADDEXISTING,
     roomId,
     spaces,
-  });
-}
-
-export function toggleRoomSettings(roomId, tabText) {
-  appDispatcher.dispatch({
-    type: cons.actions.navigation.TOGGLE_ROOM_SETTINGS,
-    roomId,
-    tabText
   });
 }
 
@@ -57,13 +42,6 @@ export function openProfileViewer(userId, roomId) {
   });
 }
 
-export function openSettings(tabText) {
-  appDispatcher.dispatch({
-    type: cons.actions.navigation.OPEN_SETTINGS,
-    tabText,
-  });
-}
-
 export function openSearch(term) {
   appDispatcher.dispatch({
     type: cons.actions.navigation.OPEN_SEARCH,
@@ -90,10 +68,3 @@ export function openReusableDialog(title, render, afterClose) {
   });
 }
 
-export function openEmojiVerification(request, targetDevice) {
-  appDispatcher.dispatch({
-    type: cons.actions.navigation.OPEN_EMOJI_VERIFICATION,
-    request,
-    targetDevice,
-  });
-}

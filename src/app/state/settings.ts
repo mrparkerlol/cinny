@@ -2,15 +2,22 @@ import { atom } from 'jotai';
 
 const STORAGE_KEY = 'settings';
 export type MessageSpacing = '0' | '100' | '200' | '300' | '400' | '500';
-export type MessageLayout = 0 | 1 | 2;
+export enum MessageLayout {
+  Modern = 0,
+  Compact = 1,
+  Bubble = 2,
+}
 
 export interface Settings {
-  themeIndex: number;
+  themeId?: string;
   useSystemTheme: boolean;
+  lightThemeId?: string;
+  darkThemeId?: string;
   isMarkdown: boolean;
   editorToolbar: boolean;
   twitterEmoji: boolean;
   pageZoom: number;
+  hideActivity: boolean;
 
   isPeopleDrawer: boolean;
   memberSortFilterIndex: number;
@@ -23,18 +30,24 @@ export interface Settings {
   urlPreview: boolean;
   encUrlPreview: boolean;
   showHiddenEvents: boolean;
+  legacyUsernameColor: boolean;
 
   showNotifications: boolean;
   isNotificationSounds: boolean;
+
+  developerTools: boolean;
 }
 
 const defaultSettings: Settings = {
-  themeIndex: 0,
+  themeId: undefined,
   useSystemTheme: true,
+  lightThemeId: undefined,
+  darkThemeId: undefined,
   isMarkdown: true,
   editorToolbar: false,
   twitterEmoji: false,
   pageZoom: 100,
+  hideActivity: false,
 
   isPeopleDrawer: true,
   memberSortFilterIndex: 0,
@@ -47,9 +60,12 @@ const defaultSettings: Settings = {
   urlPreview: true,
   encUrlPreview: false,
   showHiddenEvents: false,
+  legacyUsernameColor: false,
 
   showNotifications: true,
   isNotificationSounds: true,
+
+  developerTools: false,
 };
 
 export const getSettings = () => {

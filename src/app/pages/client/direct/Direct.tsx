@@ -33,7 +33,6 @@ import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
-import { muteChangesAtom } from '../../../state/room-list/mutedRoomList';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
@@ -45,18 +44,25 @@ import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCatego
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import { markAsRead } from '../../../../client/action/notifications';
 import { stopPropagation } from '../../../utils/keyboard';
+import { useSetting } from '../../../state/hooks/settings';
+import { settingsAtom } from '../../../state/settings';
+import {
+  getRoomNotificationMode,
+  useRoomsNotificationPreferencesContext,
+} from '../../../hooks/useRoomsNotificationPreferences';
 
 type DirectMenuProps = {
   requestClose: () => void;
 };
 const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
   const mx = useMatrixClient();
+  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const orphanRooms = useDirectRooms();
   const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
 
   const handleMarkAsRead = () => {
     if (!unread) return;
-    orphanRooms.forEach((rId) => markAsRead(mx, rId));
+    orphanRooms.forEach((rId) => markAsRead(mx, rId, hideActivity));
     requestClose();
   };
 
@@ -164,8 +170,7 @@ export function Direct() {
   useNavToActivePathMapper('direct');
   const scrollRef = useRef<HTMLDivElement>(null);
   const directs = useDirectRooms();
-  const muteChanges = useAtomValue(muteChangesAtom);
-  const mutedRooms = muteChanges.added;
+  const notificationPreferences = useRoomsNotificationPreferencesContext();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
 
   const selectedRoomId = useSelectedRoom();
@@ -251,7 +256,10 @@ export function Direct() {
                         showAvatar
                         direct
                         linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
-                        muted={mutedRooms.includes(roomId)}
+                        notificationMode={getRoomNotificationMode(
+                          notificationPreferences,
+                          room.roomId
+                        )}
                       />
                     </VirtualTile>
                   );

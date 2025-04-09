@@ -13,13 +13,18 @@ import { RoomTimeline } from './RoomTimeline';
 import { RoomViewTyping } from './RoomViewTyping';
 import { RoomTombstone } from './RoomTombstone';
 import { RoomInput } from './RoomInput';
-import { RoomViewFollowing } from './RoomViewFollowing';
+import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
 import { Page } from '../../components/page';
 import { RoomViewHeader } from './RoomViewHeader';
 import { useKeyDown } from '../../hooks/useKeyDown';
 import { editableActiveElement } from '../../utils/dom';
 import navigation from '../../../client/state/navigation';
+import { settingsAtom } from '../../state/settings';
+import { useSetting } from '../../state/hooks/settings';
+import { useAccessibleTagColors, usePowerLevelTags } from '../../hooks/usePowerLevelTags';
+import { useTheme } from '../../hooks/useTheme';
 
+const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
   const { code } = evt;
   if (evt.metaKey || evt.altKey || evt.ctrlKey) {
@@ -27,7 +32,7 @@ const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
   }
 
   // do not focus on F keys
-  if (/^F\d+$/.test(code)) return false;
+  if (FN_KEYS_REGEX.test(code)) return false;
 
   // do not focus on numlock/scroll lock
   if (
@@ -56,6 +61,8 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
   const roomInputRef = useRef<HTMLDivElement>(null);
   const roomViewRef = useRef<HTMLDivElement>(null);
 
+  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+
   const { roomId } = room;
   const editor = useEditor();
 
@@ -68,6 +75,10 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
   const canMessage = myUserId
     ? canSendEvent(EventType.RoomMessage, getPowerLevel(myUserId))
     : false;
+
+  const [powerLevelTags, getPowerLevelTag] = usePowerLevelTags(room, powerLevels);
+  const theme = useTheme();
+  const accessibleTagColors = useAccessibleTagColors(theme.kind, powerLevelTags);
 
   useKeyDown(
     window,
@@ -98,6 +109,8 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
           eventId={eventId}
           roomInputRef={roomInputRef}
           editor={editor}
+          getPowerLevelTag={getPowerLevelTag}
+          accessibleTagColors={accessibleTagColors}
         />
         <RoomViewTyping room={room} />
       </Box>
@@ -118,6 +131,8 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
                   roomId={roomId}
                   fileDropContainerRef={roomViewRef}
                   ref={roomInputRef}
+                  getPowerLevelTag={getPowerLevelTag}
+                  accessibleTagColors={accessibleTagColors}
                 />
               )}
               {!canMessage && (
@@ -132,7 +147,7 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
             </>
           )}
         </div>
-        <RoomViewFollowing room={room} />
+        {hideActivity ? <RoomViewFollowingPlaceholder /> : <RoomViewFollowing room={room} />}
       </Box>
     </Page>
   );

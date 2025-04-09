@@ -55,6 +55,12 @@ import { ScreenSize } from '../hooks/useScreenSize';
 import { MobileFriendlyPageNav, MobileFriendlyClientNav } from './MobileFriendly';
 import { ClientInitStorageAtom } from './client/ClientInitStorageAtom';
 import { ClientNonUIFeatures } from './client/ClientNonUIFeatures';
+import { AuthRouteThemeManager, UnAuthRouteThemeManager } from './ThemeManager';
+import { ReceiveSelfDeviceVerification } from '../components/DeviceVerification';
+import { AutoRestoreBackupOnVerification } from '../components/BackupRestore';
+import { RoomSettingsRenderer } from '../features/room-settings';
+import { ClientRoomsNotificationPreferences } from './client/ClientRoomsNotificationPreferences';
+import { SpaceSettingsRenderer } from '../features/space-settings';
 
 export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize) => {
   const { hashRouter } = clientConfig;
@@ -79,7 +85,12 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
 
           return null;
         }}
-        element={<AuthLayout />}
+        element={
+          <>
+            <AuthLayout />
+            <UnAuthRouteThemeManager />
+          </>
+        }
       >
         <Route path={LOGIN_PATH} element={<Login />} />
         <Route path={REGISTER_PATH} element={<Register />} />
@@ -99,23 +110,31 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
           return null;
         }}
         element={
-          <ClientRoot>
-            <ClientInitStorageAtom>
-              <ClientBindAtoms>
-                <ClientNonUIFeatures>
-                  <ClientLayout
-                    nav={
-                      <MobileFriendlyClientNav>
-                        <SidebarNav />
-                      </MobileFriendlyClientNav>
-                    }
-                  >
-                    <Outlet />
-                  </ClientLayout>
-                </ClientNonUIFeatures>
-              </ClientBindAtoms>
-            </ClientInitStorageAtom>
-          </ClientRoot>
+          <AuthRouteThemeManager>
+            <ClientRoot>
+              <ClientInitStorageAtom>
+                <ClientRoomsNotificationPreferences>
+                  <ClientBindAtoms>
+                    <ClientNonUIFeatures>
+                      <ClientLayout
+                        nav={
+                          <MobileFriendlyClientNav>
+                            <SidebarNav />
+                          </MobileFriendlyClientNav>
+                        }
+                      >
+                        <Outlet />
+                      </ClientLayout>
+                      <RoomSettingsRenderer />
+                      <SpaceSettingsRenderer />
+                      <ReceiveSelfDeviceVerification />
+                      <AutoRestoreBackupOnVerification />
+                    </ClientNonUIFeatures>
+                  </ClientBindAtoms>
+                </ClientRoomsNotificationPreferences>
+              </ClientInitStorageAtom>
+            </ClientRoot>
+          </AuthRouteThemeManager>
         }
       >
         <Route

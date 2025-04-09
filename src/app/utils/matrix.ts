@@ -4,6 +4,7 @@ import {
   encryptAttachment,
 } from 'browser-encrypt-attachment';
 import {
+  EventTimeline,
   MatrixClient,
   MatrixError,
   MatrixEvent,
@@ -17,8 +18,7 @@ import { AccountDataEvent } from '../../types/matrix/accountData';
 import { getStateEvent } from './room';
 import { StateEvent } from '../../types/matrix/room';
 
-export const matchMxId = (id: string): RegExpMatchArray | null =>
-  id.match(/^([@!$+#])(\S+):(\S+)$/);
+export const matchMxId = (id: string): RegExpMatchArray | null => id.match(/^([@!$+#])(.+):(\S+)$/);
 
 export const validMxId = (id: string): boolean => !!matchMxId(id);
 
@@ -173,7 +173,7 @@ export const eventWithShortcode = (ev: MatrixEvent) =>
 export const getDMRoomFor = (mx: MatrixClient, userId: string): Room | undefined => {
   const dmLikeRooms = mx
     .getRooms()
-    .filter((room) => mx.isRoomEncrypted(room.roomId) && room.getMembers().length <= 2);
+    .filter((room) => room.hasEncryptionStateEvent() && room.getMembers().length <= 2);
 
   return dmLikeRooms.find((room) => room.getMember(userId));
 };
@@ -205,7 +205,9 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
   if (member) return member.userId;
 
   // if there are no joined members other than us, use the oldest member
-  const member1 = getOldestMember(room.currentState.getMembers());
+  const member1 = getOldestMember(
+    room.getLiveTimeline().getState(EventTimeline.FORWARDS)?.getMembers() ?? []
+  );
   return member1?.userId ?? myUserId;
 };
 
